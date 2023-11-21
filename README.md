@@ -1,6 +1,5 @@
 # AutostaggeredRestart
 
-
 Restarting the ArcGIS Server services
 
 The challenge is how it will be scheduled so that all machines are not restarted at the same time. What we may have to do is combine SSM with Lambda. Basically what you would have to do is something like this
