@@ -10,7 +10,7 @@ def lambda_handler(event, context):
     status = ec2.describe_instance_status(InstanceIds=[instance_id])
     
     
-
+    
     for i in status["InstanceStatuses"]:
         instanceId = i["InstanceId"]
         InstanceState = i["InstanceState"]['Name']   # This is the line
