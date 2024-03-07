@@ -8,34 +8,11 @@ d_regions = ec2.describe_regions()
 delay_time = 5
 all_regions = []
 
-# Server
-instance_function = "Server"
-auto_scaling_group_name = 'arcgis-server-AutoScalingGroup-1V8A7D19WFD39'
-json_url = "https://www.arcgis-indoors.com/server/rest/info/healthCheck?f=pjson"  # Replace with your actual JSON URL
-key_to_check = "success"
-value_success = True
-
-# Portal
-instance_function = "Portal"
-portals_ids = ["i-0c2c093d4ba1e3a65","i-05999c060c3b071c3"]
-json_url = "https://www.arcgis-indoors.com/portal/portaladmin/healthCheck?f=pjson"  # Replace with your actual JSON URL
-key_to_check = "status"
-value_success = "success"
-
-# Datastore
-instance_function = "Datastore"
-datastoress_ids = ["i-0c2c093d4ba1e3a65","i-05999c060c3b071c3"]
-json_url = ""
-key_to_check = "Datastore"
-value_success = "success"
-
-# FileStore
-instance_function = "FileStore"
 
 region = 'us-east-1'
 
 
-def reboot_instance(instance_id, region, instance_function):
+def reboot_instance(instance_id, region, instance_function, json_url, key_to_check, value_success):
     ec2 = boto3.client('ec2', region_name=region)
     
     try:
@@ -63,15 +40,16 @@ def reboot_instance(instance_id, region, instance_function):
                     return False  # Instance not found or no status available
                 
                 # print(f"The value of 'status' is '{status}'")
-
+                
                 # Check for Health
-                if instance_function == "server":
+                if instance_function in ["Portal","server"]:
                     gishealth = ArcGisTestHealth(json_url, key_to_check)
                 else:
                     gishealth = value_success
                 
                 if state == 'running' and status == 'ok' and gishealth == value_success:
-                    return True  
+                    print(f"Instance ID: {instance_id}: Healthy")
+                    return True
                 else:
                     time.sleep(delay_time)  # Wait for 10 seconds before rechecking
             except Exception as e:
@@ -102,9 +80,57 @@ def ArcGisTestHealth(json_url, key_to_check):
 def lambda_handler(event, context):
     # Repeat this process for count(portals_ids) 
     try:
+        # Server
+        instance_function = "Server"
+        auto_scaling_group_name = 'arcgis-server-AutoScalingGroup-1V8A7D19WFD39'
+        json_url = "https://www.arcgis-indoors.com/server/rest/info/healthCheck?f=pjson"  # Replace with your actual JSON URL
+        key_to_check = "success"
+        value_success = True
+        # Initialize the AWS Auto Scaling client
+        autoscaling_client = boto3.client('autoscaling')
+        # Get the name of your Auto Scaling group
+        # auto_scaling_group_name = 'arcgis-server-AutoScalingGroup-1V8A7D19WFD39'
+        # Retrieve instances in the Auto Scaling group
+        response = autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[auto_scaling_group_name]
+        )
+        server_instances = []
+        for group in response['AutoScalingGroups']:
+            for instance in group['Instances']:
+                server_instances.append(instance['InstanceId'])
+        for instance_id in server_instances:
+            response = reboot_instance(instance_id, region, instance_function, json_url, key_to_check, value_success)
+    
+        # Portal
+        instance_function = "Portal"
+        portals_ids = ["i-0735087dd5adc1c0a","i-0735087dd5adc1c0a"]
+        # portals_ids = ["i-05999c060c3b071c3","i-0c2c093d4ba1e3a65"]
+        json_url = "https://www.arcgis-indoors.com/portal/portaladmin/healthCheck?f=pjson"  # Replace with your actual JSON URL
+        key_to_check = "status"
+        value_success = "success"
         for instance_id in portals_ids:
-            response = reboot_instance(instance_id, region)
-        return f"Instances {instance_id} are healthy and ready."
+            response = reboot_instance(instance_id, region, instance_function, json_url, key_to_check, value_success)
+        
+        # Datastore
+        instance_function = "Datastore"
+        datastores_ids = ["i-0735087dd5adc1c0a","i-0735087dd5adc1c0a"]
+        # datastoress_ids = ["i-073c805ba95ff3239","i-0765021a653b70108"]
+        json_url = ""
+        key_to_check = "Datastore"
+        value_success = "success"
+        for instance_id in datastores_ids:
+            response = reboot_instance(instance_id, region, instance_function, json_url, key_to_check, value_success)
+        
+        # FileServer
+        instance_function = "FileServer"
+        fileserver_ids = ["i-0735087dd5adc1c0a"]
+        json_url = ""
+        key_to_check = "FileServer"
+        value_success = "success"
+        for instance_id in fileserver_ids:
+            response = reboot_instance(instance_id, region, instance_function, json_url, key_to_check, value_success)
+        
+        return f"Instances are healthy and ready."
     
     except Exception as e:
         print('Error', e)
